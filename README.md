@@ -4,7 +4,8 @@ A Django REST API that takes a start and finish location in the USA and returns
 the driving route, the most cost-effective fuel stops along it (500-mile range),
 and the total fuel cost (10 MPG).
 
-> Work in progress. The route and fuel-stop endpoints are under construction.
+One request, one call to the routing API, and a typical response in **~10–100 ms**
+once the route is cached (about 1–1.5s on a new trip, nearly all of it the routing API).
 
 ## Tech stack
 
@@ -46,6 +47,83 @@ docker compose up --build
 ```bash
 curl http://localhost:8000/api/health/
 ```
+
+## API
+
+### Try it
+
+- **Swagger UI:** http://localhost:8000/api/docs/. Open `POST /api/route/`,
+  click *Try it out*, pick an example (Dallas → Denver, New York → Los Angeles,
+  coordinates, or an error case) and *Execute*.
+- **Postman:** *Import* → *Link* → `http://localhost:8000/api/schema/`, which
+  creates a ready-made collection from the OpenAPI schema.
+- **Map:** http://localhost:8000/api/route/map/?start=Dallas,%20TX&finish=Denver,%20CO
+
+### `POST /api/route/`
+
+```bash
+curl -X POST http://localhost:8000/api/route/ \
+     -H "Content-Type: application/json" \
+     -d '{"start": "Dallas, TX", "finish": "Denver, CO"}'
+```
+
+`start` and `finish` accept `"City, ST"` or `"lat,lng"`. Response (shortened):
+
+```json
+{
+  "start":  {"label": "Dallas, TX", "latitude": 32.79333, "longitude": -96.76651},
+  "finish": {"label": "Denver, CO", "latitude": 39.76185, "longitude": -104.88111},
+  "distance_miles": 779.4,
+  "duration_hours": 11.8,
+  "total_gallons": "77.938",
+  "total_fuel_cost": "213.29",
+  "fuel_before_first_stop": {"gallons": "0.000", "cost": "0.00"},
+  "fuel_stops": [
+    {
+      "opis_id": 72773, "name": "RaceTrac #2626", "address": "I-20 Exit 472",
+      "city": "Dallas", "state": "TX", "latitude": 32.79333, "longitude": -96.76651,
+      "mile_marker": 0.0, "off_route_miles": 0.0,
+      "price_per_gallon": "2.864", "gallons": "7.310", "cost": "20.94"
+    }
+  ],
+  "route": {"type": "LineString", "coordinates": [[-96.76651, 32.79333], "..."]},
+  "map_url": "http://localhost:8000/api/route/map/?start=Dallas%2C+TX&finish=Denver%2C+CO"
+}
+```
+
+- Money and gallons are strings, so they keep exact decimal precision.
+- `route` is GeoJSON, simplified for display (New York → Los Angeles: 35k → 2.6k
+  points, 868 KB → 59 KB). Calculations use the full route.
+- `fuel_before_first_stop` is non-zero only when the first station is past the
+  start (see the assumptions below).
+
+### `GET /api/route/map/?start=…&finish=…`
+
+The same plan on a Leaflet/OpenStreetMap map: route, numbered stops, and
+per-stop gallons and cost. It reuses the cached route, so it makes no extra
+routing call. `map_url` in the API response links to it.
+
+### Errors
+
+Every error has the same shape:
+
+```json
+{"error": {"code": "location_not_found", "message": "Could not find 'Atlantis, TX'. ..."}}
+```
+
+| Status | `code` | When |
+|---|---|---|
+| 400 | `invalid_request` | Missing or invalid fields (details in `fields`) |
+| 400 | `location_not_found` | A location can't be resolved to a US place |
+| 422 | `route_not_found` | No drivable route (e.g. Honolulu → Los Angeles) |
+| 422 | `fuel_range_exceeded` | A stretch with no station within the vehicle's range |
+| 503 | `routing_unavailable` | The routing service failed or timed out |
+
+### Other endpoints
+
+- `GET /`: endpoint index
+- `GET /api/health/`: status, stations loaded, routing provider
+- `GET /api/docs/`: Swagger UI; `GET /api/schema/`: OpenAPI 3 schema
 
 ## Fuel station data
 
@@ -102,8 +180,13 @@ request for the full road geometry and distance.
   Callers depend on a `RoutingProvider` protocol, so another provider (e.g.
   GraphHopper) is a drop-in class.
 
-The default cache is in-process (`LocMemCache`), so each gunicorn worker has
-its own. A shared Redis cache is a one-line settings change.
+The cache must be shared by all gunicorn workers; otherwise a repeat trip or
+the map page landing on another worker calls the API again. The default is a
+file cache shared within the container. Set `CACHE_URL=rediscache://…` to
+share it across containers. Repeat requests take ~10–100 ms on any worker.
+
+The place and station indexes load once at startup (`config/wsgi.py`, with
+gunicorn `--preload`), so no request pays the ~0.8s to build them.
 
 ## Stations along the route
 
@@ -182,8 +265,9 @@ python manage.py test
 
 ```
 config/              Django project settings and root URLs
-routing/             App: API views, models, serializers
-routing/services/    Business logic (geocoding, station import, routing, optimizer)
+routing/             App: API views, serializers, error format, models
+routing/services/    Business logic: trip_planner ties together geocoding,
+                     routing, stations along the route and the fuel planner
 routing/management/  build_places and load_stations commands
 data/                Fuel price CSV and the generated US place index
 ```

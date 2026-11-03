@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     # Third party
     "rest_framework",
+    "drf_spectacular",
     # Local
     "routing",
 ]
@@ -81,12 +82,13 @@ DATABASES = {
 
 
 # Cache: route results are cached so repeat queries skip the routing API.
+# It must be shared by all gunicorn workers, or a repeat trip (or the map
+# page) landing on another worker calls the API again. The default file cache
+# is shared within one container; use e.g. rediscache://redis:6379/0 to share
+# it across containers.
 
 CACHES = {
-    "default": {
-        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
-        "LOCATION": "fuel-route-cache",
-    }
+    "default": env.cache_url("CACHE_URL", default=f"filecache://{BASE_DIR / '.cache' / 'django'}"),
 }
 
 
@@ -125,6 +127,25 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.AllowAny"],
     "UNAUTHENTICATED_USER": None,
+    "EXCEPTION_HANDLER": "routing.errors.api_exception_handler",
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+}
+
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Fuel Route Optimizer API",
+    "DESCRIPTION": (
+        "Plans the cheapest fuel stops for a drive between two US locations, "
+        "for a vehicle with a 500-mile range at 10 MPG.\n\n"
+        "Locations are `\"City, ST\"` (e.g. `\"Dallas, TX\"`) or `\"lat,lng\"`. "
+        "Each new trip makes one routing API call; repeat trips are served from cache.\n\n"
+        "The same plan on a map: `GET /api/route/map/?start=Dallas, TX&finish=Denver, CO`."
+    ),
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    # Pinned so a new Swagger UI release can't change the docs page unexpectedly.
+    "SWAGGER_UI_DIST": "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.34.1",
+    "SWAGGER_UI_FAVICON_HREF": "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.34.1/favicon-32x32.png",
 }
 
 

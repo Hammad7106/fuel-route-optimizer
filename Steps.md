@@ -72,16 +72,23 @@ which keeps each request to a single routing API call.
 - [x] Merge nearby stations (cheapest per 25 mi, start station always kept): NY→LA 18 → 16 stops, +$0.19
 - [ ] Optional (step 6 if time): per-stop cost via dynamic programming to remove small purchases entirely
 
-### 5. API endpoint + map
-- [ ] `POST /api/route/` with input validation
-- [ ] Response: distance, total cost, gallons, fuel stops, route GeoJSON, `map_url`
-- [ ] Leaflet/OpenStreetMap page drawing route and stops (no extra routing call)
+### 5. API endpoint + map ✅
+- [x] `plan_trip()` service ties steps 1–4 together; views stay thin
+- [x] `POST /api/route/` with input validation
+- [x] Response: locations, distance, duration, gallons, total cost, fuel stops, GeoJSON route, `map_url`
+- [x] Route simplified for the response (NY→LA 868 KB → 59 KB), computed once and cached with the route
+- [x] One error format for every error; 400 / 422 / 503 by cause
+- [x] Leaflet/OpenStreetMap map page (no extra routing call)
+- [x] `/` endpoint index instead of a 404
+- [x] Shared file cache: repeat trips are fast on every gunicorn worker (was per-worker)
+- [x] Indexes preloaded at startup (`--preload`), so no slow first request
+- [x] API tests with OSRM faked; checked over real HTTP with gunicorn
 
 ### 6. Tests & polish
 - [ ] Unit tests for the optimizer (pure logic, no network)
 - [ ] Mocked routing client tests
 - [ ] README: design decisions, assumptions, how to run
-- [ ] Postman collection in the repo
+- [x] Swagger UI at `/api/docs/` with ready-made examples; Postman imports `/api/schema/`
 - [ ] Measure and report response times
 
 ### 7. Submit

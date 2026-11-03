@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% if plan %}{{ plan.start.label }} → {{ plan.finish.label }} · {% endif %}Fuel Route Optimizer</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <style>
+    :root {
+      --bg: #f6f7f9; --panel: #ffffff; --text: #1d2330; --muted: #5f6b7a;
+      --border: #e2e6ec; --accent: #1f6feb; --stop: #e8590c;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+           background: var(--bg); color: var(--text); }
+    .layout { display: grid; grid-template-columns: 380px 1fr; height: 100vh; }
+    aside { overflow-y: auto; padding: 20px; background: var(--panel); border-right: 1px solid var(--border); }
+    #map { height: 100%; }
+    h1 { font-size: 18px; margin: 0 0 4px; }
+    .muted { color: var(--muted); font-size: 13px; }
+    .totals { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 16px 0; }
+    .total { background: var(--bg); border-radius: 8px; padding: 10px 12px; }
+    .total b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; }
+    .total.cost b { color: var(--accent); }
+    ol { list-style: none; padding: 0; margin: 0; }
+    li { display: grid; grid-template-columns: 28px 1fr auto; gap: 10px; padding: 10px 0;
+         border-top: 1px solid var(--border); cursor: pointer; }
+    li:hover { background: var(--bg); }
+    .num { width: 24px; height: 24px; border-radius: 50%; background: var(--stop); color: #fff;
+           display: grid; place-items: center; font-size: 12px; font-weight: 600; }
+    .stop-name { font-weight: 600; }
+    .stop-cost { text-align: right; font-variant-numeric: tabular-nums; }
+    .pin { width: 26px; height: 26px; border-radius: 50%; color: #fff; display: grid; place-items: center;
+           font: 600 12px system-ui, sans-serif; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.4); }
+    .pin.stop { background: var(--stop); }
+    .pin.start { background: #2b8a3e; }
+    .pin.finish { background: #c92a2a; }
+    .error { max-width: 520px; margin: 15vh auto; padding: 24px; background: var(--panel);
+             border: 1px solid var(--border); border-radius: 10px; }
+    @media (max-width: 800px) {
+      .layout { grid-template-columns: 1fr; grid-template-rows: 55vh auto; height: auto; }
+      aside { order: 2; border-right: 0; }
+      #map { height: 55vh; }
+    }
+  </style>
+</head>
+<body>
+{% if error %}
+  <div class="error">
+    <h1>Could not plan this trip</h1>
+    <p>{{ error }}</p>
+    <p class="muted">Example: <a href="?start=Dallas, TX&amp;finish=Denver, CO">?start=Dallas, TX&amp;finish=Denver, CO</a></p>
+  </div>
+{% else %}
+  <div class="layout">
+    <aside>
+      <h1 id="title"></h1>
+      <div class="muted" id="subtitle"></div>
+      <div class="totals">
+        <div class="total cost"><span class="muted">Fuel cost</span><b id="total-cost"></b></div>
+        <div class="total"><span class="muted">Fuel</span><b id="total-gallons"></b></div>
+        <div class="total"><span class="muted">Distance</span><b id="distance"></b></div>
+        <div class="total"><span class="muted">Stops</span><b id="stop-count"></b></div>
+      </div>
+      <ol id="stops"></ol>
+    </aside>
+    <div id="map"></div>
+  </div>
+
+  {{ plan|json_script:"plan-data" }}
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script>
+    const plan = JSON.parse(document.getElementById("plan-data").textContent);
+    const money = (v) => "$" + Number(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const text = (id, value) => { document.getElementById(id).textContent = value; };
+
+    text("title", `${plan.start.label} → ${plan.finish.label}`);
+    text("subtitle", `${plan.duration_hours} h driving · 500-mile range · 10 MPG`);
+    text("total-cost", money(plan.total_fuel_cost));
+    text("total-gallons", `${Number(plan.total_gallons).toFixed(1)} gal`);
+    text("distance", `${plan.distance_miles.toLocaleString("en-US")} mi`);
+    text("stop-count", plan.fuel_stops.length);
+
+    const map = L.map("map");
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 18,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    }).addTo(map);
+
+    const line = L.polyline(plan.route.coordinates.map(([lon, lat]) => [lat, lon]),
+                            { color: "#1f6feb", weight: 4, opacity: 0.8 }).addTo(map);
+    map.fitBounds(line.getBounds(), { padding: [30, 30] });
+
+    const pin = (kind, label) => L.divIcon({
+      className: "", iconSize: [26, 26], iconAnchor: [13, 13],
+      html: `<div class="pin ${kind}">${label}</div>`,
+    });
+    // Popups are built from text nodes so station data is never parsed as HTML.
+    const popup = (lines) => {
+      const el = document.createElement("div");
+      lines.forEach(([value, bold], i) => {
+        if (i) el.appendChild(document.createElement("br"));
+        const span = document.createElement(bold ? "b" : "span");
+        span.textContent = value;
+        el.appendChild(span);
+      });
+      return el;
+    };
+
+    L.marker([plan.start.latitude, plan.start.longitude], { icon: pin("start", "A") })
+      .bindPopup(popup([["Start", true], [plan.start.label]])).addTo(map);
+    L.marker([plan.finish.latitude, plan.finish.longitude], { icon: pin("finish", "B") })
+      .bindPopup(popup([["Finish", true], [plan.finish.label]])).addTo(map);
+
+    const list = document.getElementById("stops");
+    plan.fuel_stops.forEach((stop, i) => {
+      const marker = L.marker([stop.latitude, stop.longitude], { icon: pin("stop", i + 1) })
+        .bindPopup(popup([
+          [stop.name, true],
+          [`${stop.city}, ${stop.state} · mile ${stop.mile_marker}`],
+          [`${stop.gallons} gal × $${stop.price_per_gallon} = ${money(stop.cost)}`],
+        ]))
+        .addTo(map);
+
+      const item = document.createElement("li");
+      const num = document.createElement("span");
+      num.className = "num";
+      num.textContent = i + 1;
+      const info = document.createElement("div");
+      info.appendChild(popup([[stop.name, true],
+                              [`${stop.city}, ${stop.state} · mile ${stop.mile_marker}`]]));
+      info.firstChild.lastChild.className = "muted";
+      const cost = document.createElement("div");
+      cost.className = "stop-cost";
+      cost.appendChild(popup([[money(stop.cost), true], [`${Number(stop.gallons).toFixed(1)} gal @ $${stop.price_per_gallon}`]]));
+      item.append(num, info, cost);
+      item.addEventListener("click", () => { map.setView(marker.getLatLng(), 11); marker.openPopup(); });
+      list.appendChild(item);
+    });
+  </script>
+{% endif %}
+</body>
+</html>

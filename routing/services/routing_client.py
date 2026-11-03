@@ -18,10 +18,15 @@ from django.core.cache import cache
 
 from .exceptions import RouteNotFound, RoutingProviderError
 from .geocoding import Coordinates
+from .geometry import simplify_path
 
 logger = logging.getLogger(__name__)
 
 METERS_PER_MILE = 1609.344
+
+# ~50 m: shrinks a cross-country route from ~35k to ~2.6k points (868 KB to
+# 59 KB) with no visible change on a map.
+DISPLAY_TOLERANCE_DEGREES = 0.0005
 
 # OSRM codes meaning "these points can't be connected by road", as opposed
 # to a malformed request or a server problem.
@@ -34,9 +39,16 @@ class Route:
     duration_seconds: float
     # Points along the road in GeoJSON order: (longitude, latitude).
     path: tuple[tuple[float, float], ...]
+    # A lighter copy of ``path`` for drawing; calculations use ``path``.
+    display_path: tuple[tuple[float, float], ...] = ()
 
     def to_geojson(self) -> dict:
-        return {"type": "LineString", "coordinates": [list(point) for point in self.path]}
+        """The route as a GeoJSON LineString, using the display path when available."""
+        points = self.display_path or self.path
+        return {
+            "type": "LineString",
+            "coordinates": [[round(lon, 5), round(lat, 5)] for lon, lat in points],
+        }
 
 
 class RoutingProvider(Protocol):
@@ -74,10 +86,13 @@ class OSRMClient:
             raise RoutingProviderError("The routing service returned an error.")
 
         best = payload["routes"][0]
+        path = tuple((lon, lat) for lon, lat in best["geometry"]["coordinates"])
         return Route(
             distance_miles=best["distance"] / METERS_PER_MILE,
             duration_seconds=best["duration"],
-            path=tuple((lon, lat) for lon, lat in best["geometry"]["coordinates"]),
+            path=path,
+            # Simplified once here, so cached routes don't pay for it again.
+            display_path=tuple(simplify_path(path, DISPLAY_TOLERANCE_DEGREES)),
         )
 
 
