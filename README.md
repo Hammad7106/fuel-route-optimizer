@@ -105,6 +105,31 @@ request for the full road geometry and distance.
 The default cache is in-process (`LocMemCache`), so each gunicorn worker has
 its own. A shared Redis cache is a one-line settings change.
 
+## Stations along the route
+
+Stations count as on the route when they are within
+`STATION_SEARCH_RADIUS_MILES` (default 10) of the road. Each one gets a
+**mile marker** (how far into the trip it is) and its **off-route distance**.
+
+- All stations are held in memory once per worker (6,620 stations, ~50 ms
+  to load).
+- Per request, a KD-tree (`scipy.spatial.cKDTree`) is built over the route's
+  points, and every station is matched to its nearest point in one vectorized
+  query. Points are 3D unit vectors, so distances are exact on the sphere.
+- OSRM leaves gaps of up to ~4 miles on straight roads, so the path is filled
+  in to at most 0.5 miles between points before matching.
+
+| Trip | Distance | Stations on route | Largest gap | Time |
+|---|---|---|---|---|
+| New York → Los Angeles | 2,810 mi | 459 | 138 mi | 17 ms |
+| Dallas → Denver | 779 mi | 107 | 95 mi | 5 ms |
+| Chicago → Milwaukee | 95 mi | 53 | 20 mi | 2 ms |
+
+**Why 10 miles:** station coordinates are city-level, so a truck stop can sit
+a few miles from its town's centre point. Stations in the results are a median
+of 1–3 miles off the road. A narrower corridor misses real highway stops; a
+wider one admits stations needing long detours.
+
 ## Running tests
 
 ```bash

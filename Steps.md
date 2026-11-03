@@ -52,10 +52,14 @@ which keeps each request to a single routing API call.
 - [x] Health check reports stations loaded and routing provider
 - [x] Tests with OSRM mocked (no network)
 
-### 3. Stations along the route
-- [ ] Compute cumulative miles along the route geometry
-- [ ] Spatial index (KD-tree) to find stations within a few miles of the route
-- [ ] Record each station's mile marker along the trip
+### 3. Stations along the route ✅
+- [x] Compute cumulative miles along the route geometry (scaled to OSRM's distance)
+- [x] Fill in OSRM's long straight-road gaps (up to ~4 mi) to ≤ 0.5 mi between points
+- [x] KD-tree over route points; all stations matched in one vectorized query
+- [x] Record each station's mile marker and off-route distance
+- [x] 10-mile corridor, configurable via `STATION_SEARCH_RADIUS_MILES`
+- [x] NY→LA: 459 stations in 17 ms; largest gap 138 mi (well under the 500-mi range)
+- [x] Tests on synthetic equator routes (exact expected distances)
 
 ### 4. Fuel-stop optimizer
 - [ ] Greedy algorithm, 500-mile range, starting with a full tank
