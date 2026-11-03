@@ -61,13 +61,16 @@ which keeps each request to a single routing API call.
 - [x] NY→LA: 459 stations in 17 ms; largest gap 138 mi (well under the 500-mi range)
 - [x] Tests on synthetic equator routes (exact expected distances)
 
-### 4. Fuel-stop optimizer
-- [ ] Greedy algorithm, 500-mile range, starting with a full tank
+### 4. Fuel-stop optimizer ✅
+- [x] Exact greedy algorithm, 500-mile range; fill up at the start, arrive empty
   - Cheaper station within reach → buy only enough to get there
   - Otherwise → fill up and go to the cheapest station in range
   - Destination within reach → buy only enough to finish
-- [ ] Total cost at 10 MPG
-- [ ] Edge cases: short trip (no stops), gap over 500 miles (error)
+- [x] Total cost at 10 MPG, `Decimal` money
+- [x] Edge cases: short trip, first station past the start, gap over 500 miles (error)
+- [x] Optimality test against a SciPy linear program on 300 random trips
+- [x] Merge nearby stations (cheapest per 25 mi, start station always kept): NY→LA 18 → 16 stops, +$0.19
+- [ ] Optional (step 6 if time): per-stop cost via dynamic programming to remove small purchases entirely
 
 ### 5. API endpoint + map
 - [ ] `POST /api/route/` with input validation

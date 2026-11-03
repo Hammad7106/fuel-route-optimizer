@@ -130,6 +130,48 @@ a few miles from its town's centre point. Stations in the results are a median
 of 1–3 miles off the road. A narrower corridor misses real highway stops; a
 wider one admits stations needing long detours.
 
+## Choosing fuel stops
+
+With a 500-mile range and 10 MPG (both configurable), the planner picks where
+to stop and how much to buy at each stop. The route is fixed and any amount
+can be bought, so this is the "gas station problem", which has an exact
+greedy solution:
+
+> At each station, if a cheaper station is within range, buy just enough to
+> reach it. Otherwise fill up (or buy just enough to finish) and continue to
+> the cheapest station within range.
+
+Optimality is tested, not just claimed: `OptimalityTests` solves 300 random
+trips as a linear program with SciPy and checks the planner matches to the
+cent. A deliberately broken planner (always fill up) fails 213 of them.
+
+**Assumptions**
+
+- The vehicle fills up at the start and arrives with an empty tank, so the
+  total covers exactly the fuel used (miles ÷ MPG). If the first station is
+  past the start, the fuel to reach it is charged at that station's price.
+- Detours to stations off the road (up to 10 miles) are treated as free.
+- Stops cost nothing beyond fuel; on price ties the planner prefers fewer stops.
+- Money uses `Decimal`, rounded to the cent per stop.
+
+**Avoiding tiny stops.** The exact plan can include stops no driver would make,
+such as 0.12 gallons a mile before a station 14¢ cheaper. Before planning,
+only the cheapest station in each 25-mile stretch is kept as a candidate
+(`FUEL_STOP_MERGE_MILES`; `0` disables it). The station at the start is
+always kept, since the vehicle fills up there. If merging would leave a gap
+beyond the range, the planner uses all stations instead. Merging only removes
+options, so the plan can never undercut the true optimum; the tests check
+this too. In practice it costs cents and removes a few stops. Removing small
+purchases entirely needs a per-stop cost in the objective (a
+dynamic-programming formulation), noted as a possible extension.
+
+| Trip | Stops (exact → merged) | Fuel cost (exact → merged) | Stations + plan |
+|---|---|---|---|
+| Dallas → Denver (779 mi) | 5 → 5 | $213.29 → $213.29 | 6 ms |
+| New York → Los Angeles (2,810 mi) | 18 → 16 | $852.61 → $852.80 | 17 ms |
+| Chicago → Milwaukee (95 mi) | 2 → 2 | $29.63 → $29.63 | 2 ms |
+| Seattle → Miami (3,303 mi) | 20 → 17 | $1,026.92 → $1,027.18 | ~20 ms |
+
 ## Running tests
 
 ```bash

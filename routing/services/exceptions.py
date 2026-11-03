@@ -19,3 +19,7 @@ class RouteNotFound(RoutePlanningError):
 
 class RoutingProviderError(RoutePlanningError):
     """The routing provider failed, timed out or returned an unusable response."""
+
+
+class FuelRangeExceeded(RoutePlanningError):
+    """Part of the route has no fuel station within the vehicle's range."""
