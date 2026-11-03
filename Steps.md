@@ -28,8 +28,8 @@ which keeps each request to a single routing API call.
 ## Steps
 
 ### 0. Finish setup
-- [ ] Restart Docker Desktop, run `docker compose up --build`, confirm `/api/health/`
-- [ ] Get a free OpenRouteService key and set `ORS_API_KEY` in `.env`
+- [x] Restart Docker Desktop, run `docker compose up --build`, confirm `/api/health/`
+- [x] ~~ORS API key~~: switched to OSRM (no key needed; ORS was down for maintenance)
 
 ### 1. Geocode fuel stations (unblocks everything) ✅
 - [x] `FuelStation` model (name, address, city, state, price, lat, lon)
@@ -42,12 +42,15 @@ which keeps each request to a single routing API call.
 - [x] Commit the place index (instead of the DB) so the load is reproducible
 - [x] Tests: normalization, name variants, source priority, dedupe, command
 
-### 2. Routing client
-- [ ] One ORS directions call per request
-- [ ] Geocode start/finish locally (fall back to ORS geocoding if not found)
-- [ ] Accept raw `lat,lng` input too
-- [ ] Timeouts and clear error handling
-- [ ] Cache routes by start/finish
+### 2. Routing client ✅
+- [x] One OSRM `route` call per new trip (full GeoJSON geometry + distance)
+- [x] Resolve start/finish locally: `"City, ST"` via the place index, or raw `"lat,lng"`
+  - No external geocoding fallback, which keeps every trip at exactly 1 API call
+- [x] Timeouts and distinct errors: location not found / no route / provider unavailable
+- [x] Cache routes for 24h by rounded coordinates (repeat NY→LA: 1.1s → 4ms)
+- [x] `RoutingProvider` protocol so the provider is swappable
+- [x] Health check reports stations loaded and routing provider
+- [x] Tests with OSRM mocked (no network)
 
 ### 3. Stations along the route
 - [ ] Compute cumulative miles along the route geometry

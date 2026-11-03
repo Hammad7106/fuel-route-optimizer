@@ -9,7 +9,7 @@ and the total fuel cost (10 MPG).
 ## Tech stack
 
 - Python 3.13, Django 6.1, Django REST Framework
-- [OpenRouteService](https://openrouteservice.org/) for routing (free tier)
+- [OSRM](https://project-osrm.org/) for routing (public server, no API key)
 - Fuel prices from `data/fuel_prices.csv`
 
 ## Getting started
@@ -20,8 +20,7 @@ and the total fuel cost (10 MPG).
 cp .env.example .env
 ```
 
-Set `DJANGO_SECRET_KEY` and `ORS_API_KEY` (free key from
-https://openrouteservice.org/dev/#/signup) in `.env`.
+Set `DJANGO_SECRET_KEY` in `.env`. Routing needs no API key.
 
 ### 2a. Run locally
 
@@ -83,6 +82,28 @@ from public datasets, most trusted first:
 The output is committed, so this only needs re-running to refresh the data.
 Names are matched ignoring case, spacing, punctuation and accents, with common
 abbreviations expanded ("Mc Calla" = "McCalla", "St." = "Saint").
+
+## Routing
+
+Each new trip makes exactly **one** external API call: an OSRM `route`
+request for the full road geometry and distance.
+
+- **Locations** are resolved locally, with no geocoding API. Accepted forms:
+  `"City, ST"` (e.g. `"Chicago, IL"`, matched against the place index above)
+  or `"lat,lng"` (e.g. `"41.88,-87.63"`).
+- **Caching:** routes are cached for `ROUTE_CACHE_TIMEOUT` (24h), keyed by
+  coordinates rounded to ~11 m, so repeat trips make no API call (about 1.1s
+  becomes about 4ms for New York → Los Angeles). The route is cached rather
+  than the final answer, so reloading fuel prices takes effect immediately.
+- **Errors:** an unknown location, no drivable route (e.g. Honolulu → Los
+  Angeles) and an unavailable provider are distinct errors with clear messages.
+- **Swappable provider:** `OSRM_BASE_URL` defaults to the public demo server,
+  which is fair-use only. In production, point it at a self-hosted OSRM.
+  Callers depend on a `RoutingProvider` protocol, so another provider (e.g.
+  GraphHopper) is a drop-in class.
+
+The default cache is in-process (`LocMemCache`), so each gunicorn worker has
+its own. A shared Redis cache is a one-line settings change.
 
 ## Running tests
 

@@ -13,7 +13,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 env = environ.Env(
     DJANGO_DEBUG=(bool, False),
     DJANGO_ALLOWED_HOSTS=(list, ["localhost", "127.0.0.1"]),
-    ORS_API_KEY=(str, ""),
+    OSRM_BASE_URL=(str, "https://router.project-osrm.org"),
+    ROUTING_TIMEOUT_SECONDS=(float, 10.0),
     VEHICLE_MAX_RANGE_MILES=(float, 500.0),
     VEHICLE_MPG=(float, 10.0),
     ROUTE_CACHE_TIMEOUT=(int, 60 * 60 * 24),
@@ -142,7 +143,8 @@ LOGGING = {
 
 # Fuel route optimizer
 
-ORS_API_KEY = env("ORS_API_KEY")
+OSRM_BASE_URL = env("OSRM_BASE_URL")
+ROUTING_TIMEOUT_SECONDS = env("ROUTING_TIMEOUT_SECONDS")
 FUEL_PRICES_CSV = BASE_DIR / "data" / "fuel_prices.csv"
 US_PLACES_FILE = BASE_DIR / "data" / "us_places.csv.gz"
 VEHICLE_MAX_RANGE_MILES = env("VEHICLE_MAX_RANGE_MILES")
