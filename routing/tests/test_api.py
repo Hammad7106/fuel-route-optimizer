@@ -170,6 +170,8 @@ class TripMapViewTests(TripApiTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'id="plan-data"')
         self.assertContains(response, "leaflet@1.9.4")
+        # Tile requests must carry a Referer, or OpenStreetMap blocks them.
+        self.assertContains(response, 'referrerPolicy: "strict-origin-when-cross-origin"')
         self.assertContains(response, '"total_fuel_cost": ')
         self.assertContains(response, "STOP #2")
 

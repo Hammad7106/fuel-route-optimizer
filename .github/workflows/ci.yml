@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  DJANGO_SECRET_KEY: ci-only-not-secret
+
+jobs:
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check migrations are up to date
+        run: python manage.py makemigrations --check --dry-run
+
+      - name: Run tests
+        run: python manage.py test
+
+  docker:
+    name: Docker smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t fuel-route-optimizer .
+
+      - name: Start container
+        run: |
+          docker run -d --name app -p 8000:8000 \
+            -e DJANGO_SECRET_KEY -e DJANGO_ALLOWED_HOSTS=localhost \
+            fuel-route-optimizer
+
+      - name: Wait for stations to load and the server to start
+        run: |
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://localhost:8000/api/health/ -o health.json; then
+              cat health.json
+              python3 -c "import json; n = json.load(open('health.json'))['stations_loaded']; assert n > 6000, n"
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs app
+          exit 1
+
+      - name: Check the API docs are served
+        run: curl -fsS http://localhost:8000/api/docs/ -o /dev/null
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker logs app
