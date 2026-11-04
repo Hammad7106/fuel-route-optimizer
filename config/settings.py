@@ -7,6 +7,8 @@ All environment-specific values are read from environment variables
 from pathlib import Path
 
 import environ
+from django.templatetags.static import static
+from django.urls import reverse_lazy
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -31,6 +33,9 @@ ALLOWED_HOSTS = env("DJANGO_ALLOWED_HOSTS")
 # Application definition
 
 INSTALLED_APPS = [
+    # Unfold must come before django.contrib.admin so its templates win.
+    "unfold",
+    "unfold.contrib.filters",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -46,6 +51,8 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # Serves static files (the admin's CSS/JS) when DEBUG is off, as in Docker.
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -114,6 +121,10 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},
+}
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
@@ -146,6 +157,65 @@ SPECTACULAR_SETTINGS = {
     # Pinned so a new Swagger UI release can't change the docs page unexpectedly.
     "SWAGGER_UI_DIST": "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.34.1",
     "SWAGGER_UI_FAVICON_HREF": "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.34.1/favicon-32x32.png",
+}
+
+
+# Admin (django-unfold)
+
+UNFOLD = {
+    "SITE_TITLE": "Fuel Route Optimizer",
+    "SITE_HEADER": "Fuel Route Optimizer",
+    "SITE_SUBHEADER": "Admin",
+    "SITE_SYMBOL": "local_gas_station",
+    "SITE_URL": "/",
+    "LOGIN": {
+        # Illustration shown beside the login form on wide screens.
+        "image": lambda request: static("routing/admin-login.svg"),
+    },
+    "SIDEBAR": {
+        "show_search": True,
+        "navigation": [
+            {
+                "title": "Fuel data",
+                "items": [
+                    {
+                        "title": "Fuel stations",
+                        "icon": "local_gas_station",
+                        "link": reverse_lazy("admin:routing_fuelstation_changelist"),
+                    },
+                ],
+            },
+            {
+                "title": "API",
+                "separator": True,
+                "items": [
+                    {"title": "API docs (Swagger)", "icon": "api", "link": "/api/docs/"},
+                    {
+                        "title": "Example map",
+                        "icon": "map",
+                        "link": "/api/route/map/?start=Dallas, TX&finish=Denver, CO",
+                    },
+                    {"title": "Health", "icon": "monitor_heart", "link": "/api/health/"},
+                ],
+            },
+            {
+                "title": "Users",
+                "separator": True,
+                "items": [
+                    {
+                        "title": "Users",
+                        "icon": "person",
+                        "link": reverse_lazy("admin:auth_user_changelist"),
+                    },
+                    {
+                        "title": "Groups",
+                        "icon": "group",
+                        "link": reverse_lazy("admin:auth_group_changelist"),
+                    },
+                ],
+            },
+        ],
+    },
 }
 
 

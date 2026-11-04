@@ -1,8 +1,10 @@
-Django==6.1.2
 django-environ==0.14.0
+django-unfold==0.110.1
+Django==6.1.2
 djangorestframework==3.18.3
 drf-spectacular==0.30.0
 gunicorn==26.2.0
 numpy==2.5.4
 requests==2.34.2
 scipy==1.18.1
+whitenoise==6.12.0

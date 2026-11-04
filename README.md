@@ -21,12 +21,16 @@ cp .env.example .env
 docker compose up --build
 ```
 
+Full instructions, running without Docker, and troubleshooting:
+**[HOW_TO_RUN.md](HOW_TO_RUN.md)**.
+
 Then try it:
 
 | | |
 |---|---|
 | **Swagger UI** | http://localhost:8000/api/docs/: open `POST /api/route/`, *Try it out*, pick an example, *Execute* |
 | **Map** | http://localhost:8000/api/route/map/?start=Dallas,%20TX&finish=Denver,%20CO |
+| **Admin** | http://localhost:8000/admin/: `admin` / `change-me`, to browse and filter the stations |
 | **Postman** | *Import* → *Link* → `http://localhost:8000/api/schema/` |
 | **curl** | `curl -X POST localhost:8000/api/route/ -H "Content-Type: application/json" -d '{"start": "Dallas, TX", "finish": "Denver, CO"}'` |
 
@@ -34,6 +38,9 @@ On start, the container loads the 6,620 fuel stations (about 1s) and then serves
 with gunicorn. No API key is needed.
 
 ## Design at a glance
+
+Diagrams of the components, startup, request flow and code structure are in
+**[ARCHITECTURE.md](ARCHITECTURE.md)**.
 
 ```
 "Dallas, TX" ─┐
@@ -223,6 +230,9 @@ it can never undercut the true optimum; the tests check this too.
 
 ## Assumptions and trade-offs
 
+The main ones are below. All 18, each with an example, are in
+**[ASSUMPTIONS.md](ASSUMPTIONS.md)**.
+
 | Assumption | Why | Effect |
 |---|---|---|
 | The vehicle fills up at the start and arrives empty | The total then covers exactly the fuel the trip uses (miles ÷ MPG). Starting full would make trips under 500 miles cost $0. | If the first station is past the start, the fuel to reach it is charged at that station's price (`fuel_before_first_stop`). |
@@ -251,8 +261,9 @@ pip install -r requirements.txt
 cp .env.example .env
 python manage.py migrate
 python manage.py load_stations
+python manage.py ensure_superuser   # admin user from .env
 python manage.py runserver
-python manage.py test            # 94 tests; OSRM is faked, no network needed
+python manage.py test               # 103 tests; OSRM is faked, no network needed
 ```
 
 CI runs the tests and a Docker smoke test (build, start, check that stations
@@ -273,6 +284,7 @@ All settings come from the environment or `.env` (see `.env.example`):
 | `FUEL_STOP_MERGE_MILES` | `25` | Keep the cheapest station per stretch; `0` to disable |
 | `ROUTE_CACHE_TIMEOUT` | `86400` | Seconds |
 | `CACHE_URL` | file cache in `.cache/django` | e.g. `rediscache://redis:6379/0` |
+| `DJANGO_SUPERUSER_USERNAME` / `_PASSWORD` | (unset) | Admin user created on start if missing; `.env.example` sets `admin` / `change-me` |
 
 ### Project layout
 
@@ -280,6 +292,7 @@ All settings come from the environment or `.env` (see `.env.example`):
 config/                 Settings, root URLs, WSGI (index warm-up)
 routing/
   views.py              Thin API and map views
+  admin.py              Unfold admin: read-only stations, state and price filters
   serializers.py        Request validation and response shape
   errors.py             One error format for every error
   openapi.py            Swagger / OpenAPI documentation
@@ -290,7 +303,7 @@ routing/
     routing_client.py   OSRM client + shared cache
     route_stations.py   Stations along the route (KD-tree)
     fuel_planner.py     Cheapest fuel plan
-  management/commands/  build_places, load_stations
+  management/commands/  build_places, load_stations, ensure_superuser
   templates/            Map page
 data/                   Fuel price CSV and the US place index
 ```
