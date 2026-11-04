@@ -157,6 +157,8 @@ SPECTACULAR_SETTINGS = {
     # Pinned so a new Swagger UI release can't change the docs page unexpectedly.
     "SWAGGER_UI_DIST": "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.34.1",
     "SWAGGER_UI_FAVICON_HREF": "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.34.1/favicon-32x32.png",
+    # Show how long each "Try it out" request took (cached vs new trips).
+    "SWAGGER_UI_SETTINGS": {"displayRequestDuration": True},
 }
 
 
